@@ -1,0 +1,39 @@
+# Secrets
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.cer
+
+# License server/admin files
+admin.zip
+reset-admin.php
+make-hash.php
+install.php
+config.php
+app/config.php
+
+# Source/build internals
+node_modules/
+frontend/node_modules/
+dist/
+build/
+release-commercial/
+.backups/
+*.log
+
+# AI model files
+*.gguf
+*.safetensors
+*.onnx
+*.pt
+*.pth
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db

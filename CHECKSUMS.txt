@@ -1,0 +1,8 @@
+Realigns Local Studio v1 - Release Checksums
+
+Realigns Local Studio v1-1.0.0-mac-arm64.dmg
+1d9dd9364aab1b50afd0da643612107ef0f53844d2d421344dd3b3765e8d5ba1  Realigns Local Studio v1-1.0.0-mac-arm64.dmg
+
+Realigns Local Studio v1-1.0.0-win-x64.exe
+59d1fc0b1c58f53cbf510e8a76af89b23e8459fa59539aa0c5395b44c6099edf  Realigns Local Studio v1-1.0.0-win-x64.exe
+
