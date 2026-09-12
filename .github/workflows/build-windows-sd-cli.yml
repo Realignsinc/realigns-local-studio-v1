@@ -1,0 +1,147 @@
+name: Build Windows sd-cli
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows-sd-cli:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout Realigns repository
+        uses: actions/checkout@v4
+
+      - name: Clone stable-diffusion.cpp
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $Commit = "7f410a3793c5bba8eb198e962ce7a3d6095f9d89"
+          $Source = "$env:GITHUB_WORKSPACE\stable-diffusion.cpp"
+
+          git clone --recursive `
+            https://github.com/leejet/stable-diffusion.cpp.git `
+            $Source
+
+          Set-Location $Source
+
+          git checkout $Commit
+          git submodule update --init --recursive
+
+          $Actual = git rev-parse HEAD
+
+          Write-Host "EXPECTED: $Commit"
+          Write-Host "ACTUAL:   $Actual"
+
+          if ($Actual -ne $Commit) {
+            throw "Source commit mismatch."
+          }
+
+      - name: Configure Windows x64 CPU build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $Source = "$env:GITHUB_WORKSPACE\stable-diffusion.cpp"
+          $Build  = "$Source\build-realigns-win-x64"
+
+          cmake `
+            -S $Source `
+            -B $Build `
+            -G "Visual Studio 17 2022" `
+            -A x64 `
+            -DSD_WEBP=OFF `
+            -DSD_WEBM=OFF `
+            -DSD_BUILD_SHARED_LIBS=OFF
+
+      - name: Build sd-cli
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $Build = "$env:GITHUB_WORKSPACE\stable-diffusion.cpp\build-realigns-win-x64"
+
+          cmake --build $Build `
+            --config Release `
+            --target sd-cli `
+            --parallel
+
+      - name: Collect runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $Build = "$env:GITHUB_WORKSPACE\stable-diffusion.cpp\build-realigns-win-x64"
+          $Out   = "$env:GITHUB_WORKSPACE\windows-sd-cli-runtime"
+
+          New-Item -ItemType Directory -Force -Path $Out | Out-Null
+
+          $SdCli = Get-ChildItem `
+            -Path $Build `
+            -Filter "sd-cli.exe" `
+            -Recurse `
+            -File |
+            Select-Object -First 1
+
+          if (-not $SdCli) {
+            throw "sd-cli.exe was not produced."
+          }
+
+          Copy-Item $SdCli.FullName "$Out\sd-cli.exe"
+
+          Get-ChildItem `
+            -Path $SdCli.Directory.FullName `
+            -Filter "*.dll" `
+            -File `
+            -ErrorAction SilentlyContinue |
+            ForEach-Object {
+              Copy-Item $_.FullName $Out
+            }
+
+          Set-Location $Out
+
+          .\sd-cli.exe --version
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "sd-cli --version failed."
+          }
+
+          Get-ChildItem `
+            -Path $Out `
+            -File |
+            Sort-Object Name |
+            ForEach-Object {
+              $Hash = Get-FileHash `
+                $_.FullName `
+                -Algorithm SHA256
+
+              "{0}  {1}" -f `
+                $Hash.Hash.ToLower(), `
+                $_.Name
+            } |
+            Set-Content "$Out\SHA256SUMS.txt"
+
+          @"
+          Realigns Local Studio v1
+          Windows x64 Image Runtime
+
+          Source:
+          stable-diffusion.cpp
+
+          Source commit:
+          7f410a3793c5bba8eb198e962ce7a3d6095f9d89
+
+          Build:
+          Windows x64
+          CPU baseline
+          GitHub Actions windows-2022
+          Release
+          "@ |
+          Set-Content "$Out\REALIGNS-SOURCE-COMMIT.txt"
+
+      - name: Upload Windows runtime artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: realigns-sd-cli-win-x64
+          path: windows-sd-cli-runtime
+          if-no-files-found: error
