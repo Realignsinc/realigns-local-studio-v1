@@ -21,12 +21,13 @@ jobs:
 
           sudo apt-get update
 
-          sudo apt-get install -y \
+            sudo apt-get install -y \
             build-essential \
             cmake \
             ninja-build \
             git \
-            pkg-config
+            pkg-config \
+            file
 
       - name: Build approved llama.cpp Linux x64 runtime
         shell: bash
@@ -173,32 +174,32 @@ jobs:
           ldd "$OUT/sd-cli" \
             >> "$OUT/LLD-DEPENDENCIES.txt"
 
-          LLAMA_COMMIT="$(
+                    LLAMA_COMMIT="$(
             cat "$GITHUB_WORKSPACE/LLAMA_FULL_COMMIT.txt"
           )"
 
           printf '%s\n' \
-  "Realigns Local Studio v1" \
-  "Linux x64 AI Runtime" \
-  "" \
-  "llama.cpp:" \
-  "expected installed Mac authority: bb28c1fe2" \
-  "resolved Linux source commit: $LLAMA_COMMIT" \
-  "" \
-  "stable-diffusion.cpp:" \
-  "7f410a3793c5bba8eb198e962ce7a3d6095f9d89" \
-  "" \
-  "Platform:" \
-  "Linux x86_64" \
-  "" \
-  "Build:" \
-  "CPU baseline" \
-  "Release" \
-  "GGML_NATIVE=OFF" \
-  "" \
-  "Model weights:" \
-  "NOT INCLUDED" \
-  > "$OUT/REALIGNS-RUNTIME-AUTHORITY.txt"
+            "Realigns Local Studio v1" \
+            "Linux x64 AI Runtime" \
+            "" \
+            "llama.cpp:" \
+            "expected installed Mac authority: bb28c1fe2" \
+            "resolved Linux source commit: $LLAMA_COMMIT" \
+            "" \
+            "stable-diffusion.cpp:" \
+            "7f410a3793c5bba8eb198e962ce7a3d6095f9d89" \
+            "" \
+            "Platform:" \
+            "Linux x86_64" \
+            "" \
+            "Build:" \
+            "CPU baseline" \
+            "Release" \
+            "GGML_NATIVE=OFF" \
+            "" \
+            "Model weights:" \
+            "NOT INCLUDED" \
+            > "$OUT/REALIGNS-RUNTIME-AUTHORITY.txt"
 
           cd "$OUT"
 
