@@ -18,18 +18,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build git pkg-config file
 
-          sudo apt-get install -y \
-            build-essential \
-            cmake \
-            ninja-build \
-            git \
-            pkg-config \
-            file
-
-      - name: Build approved llama.cpp Linux x64 runtime
+      - name: Build approved llama.cpp runtime
         shell: bash
         run: |
           set -euo pipefail
@@ -38,50 +30,39 @@ jobs:
           SRC="$ROOT/llama.cpp"
           BUILD="$SRC/build-realigns-linux-x64"
 
-          EXPECTED_SHORT="bb28c1fe2"
-
           mkdir -p "$ROOT"
 
           git clone https://github.com/ggml-org/llama.cpp.git "$SRC"
 
           cd "$SRC"
 
-          git checkout "$EXPECTED_SHORT"
+          git checkout bb28c1fe2
 
-          ACTUAL_FULL="$(git rev-parse HEAD)"
-          ACTUAL_SHORT="$(git rev-parse --short=9 HEAD)"
+          ACTUAL="$(git rev-parse HEAD)"
 
-          echo "EXPECTED SHORT: $EXPECTED_SHORT"
-          echo "ACTUAL SHORT:   $ACTUAL_SHORT"
-          echo "ACTUAL FULL:    $ACTUAL_FULL"
+          echo "LLAMA FULL COMMIT: $ACTUAL"
 
-          if [[ "$ACTUAL_FULL" != "$EXPECTED_SHORT"* ]]; then
-            echo "FAIL: llama.cpp authority mismatch."
-            exit 1
-          fi
+          case "$ACTUAL" in
+            bb28c1fe2*)
+              echo "PASS: llama.cpp authority verified."
+              ;;
+            *)
+              echo "FAIL: unexpected llama.cpp commit."
+              exit 1
+              ;;
+          esac
 
-          cmake \
-            -S "$SRC" \
-            -B "$BUILD" \
-            -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_SHARED_LIBS=OFF \
-            -DGGML_NATIVE=OFF \
-            -DLLAMA_CURL=OFF
+          cmake -S "$SRC" -B "$BUILD" -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DLLAMA_CURL=OFF
 
-          cmake \
-            --build "$BUILD" \
-            --target llama-server \
-            --parallel
+          cmake --build "$BUILD" --target llama-server --parallel
 
           test -x "$BUILD/bin/llama-server"
 
           "$BUILD/bin/llama-server" --version
 
-          echo "$ACTUAL_FULL" \
-            > "$GITHUB_WORKSPACE/LLAMA_FULL_COMMIT.txt"
+          printf '%s\n' "$ACTUAL" > "$GITHUB_WORKSPACE/LLAMA_FULL_COMMIT.txt"
 
-      - name: Build approved stable-diffusion.cpp Linux x64 runtime
+      - name: Build approved stable-diffusion.cpp runtime
         shell: bash
         run: |
           set -euo pipefail
@@ -92,10 +73,7 @@ jobs:
 
           EXPECTED="7f410a3793c5bba8eb198e962ce7a3d6095f9d89"
 
-          git clone \
-            --recursive \
-            https://github.com/leejet/stable-diffusion.cpp.git \
-            "$SRC"
+          git clone --recursive https://github.com/leejet/stable-diffusion.cpp.git "$SRC"
 
           cd "$SRC"
 
@@ -112,25 +90,15 @@ jobs:
             exit 1
           fi
 
-          cmake \
-            -S "$SRC" \
-            -B "$BUILD" \
-            -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DSD_WEBP=OFF \
-            -DSD_WEBM=OFF \
-            -DGGML_NATIVE=OFF
+          cmake -S "$SRC" -B "$BUILD" -G Ninja -DCMAKE_BUILD_TYPE=Release -DSD_WEBP=OFF -DSD_WEBM=OFF -DGGML_NATIVE=OFF
 
-          cmake \
-            --build "$BUILD" \
-            --target sd-cli \
-            --parallel
+          cmake --build "$BUILD" --target sd-cli --parallel
 
           test -x "$BUILD/bin/sd-cli"
 
           "$BUILD/bin/sd-cli" --version
 
-      - name: Assemble controlled Linux x64 runtime
+      - name: Assemble Linux x64 runtime
         shell: bash
         run: |
           set -euo pipefail
@@ -138,66 +106,43 @@ jobs:
           OUT="$GITHUB_WORKSPACE/realigns-linux-x64-runtime"
 
           LLAMA="$GITHUB_WORKSPACE/linux-build/llama.cpp/build-realigns-linux-x64/bin/llama-server"
+
           SD="$GITHUB_WORKSPACE/linux-build/stable-diffusion.cpp/build-realigns-linux-x64/bin/sd-cli"
+
+          LLAMA_COMMIT="$(cat "$GITHUB_WORKSPACE/LLAMA_FULL_COMMIT.txt")"
 
           mkdir -p "$OUT"
 
           cp "$LLAMA" "$OUT/llama-server"
           cp "$SD" "$OUT/sd-cli"
 
-          chmod 755 \
-            "$OUT/llama-server" \
-            "$OUT/sd-cli"
+          chmod 755 "$OUT/llama-server" "$OUT/sd-cli"
 
-          echo "===== FILE TYPES =====" \
-            > "$OUT/FILE-TYPES.txt"
+          file "$OUT/llama-server" > "$OUT/FILE-TYPES.txt"
+          file "$OUT/sd-cli" >> "$OUT/FILE-TYPES.txt"
 
-          file "$OUT/llama-server" \
-            >> "$OUT/FILE-TYPES.txt"
+          ldd "$OUT/llama-server" > "$OUT/LDD-DEPENDENCIES.txt"
 
-          file "$OUT/sd-cli" \
-            >> "$OUT/FILE-TYPES.txt"
+          printf '\n===== SD-CLI =====\n' >> "$OUT/LDD-DEPENDENCIES.txt"
 
-          echo "===== LLAMA-SERVER LDD =====" \
-            > "$OUT/LLD-DEPENDENCIES.txt"
+          ldd "$OUT/sd-cli" >> "$OUT/LDD-DEPENDENCIES.txt"
 
-          ldd "$OUT/llama-server" \
-            >> "$OUT/LLD-DEPENDENCIES.txt"
-
-          echo "" \
-            >> "$OUT/LLD-DEPENDENCIES.txt"
-
-          echo "===== SD-CLI LDD =====" \
-            >> "$OUT/LLD-DEPENDENCIES.txt"
-
-          ldd "$OUT/sd-cli" \
-            >> "$OUT/LLD-DEPENDENCIES.txt"
-
-          LLAMA_COMMIT="$(
-            cat "$GITHUB_WORKSPACE/LLAMA_FULL_COMMIT.txt"
-          )"
-
-          printf '%s\n' "Realigns Local Studio v1" "Linux x64 AI Runtime" "" "llama.cpp:" "expected installed Mac authority: bb28c1fe2" "resolved Linux source commit: $LLAMA_COMMIT" "" "stable-diffusion.cpp:" "7f410a3793c5bba8eb198e962ce7a3d6095f9d89" "" "Platform:" "Linux x86_64" "" "Build:" "CPU baseline" "Release" "GGML_NATIVE=OFF" "" "Model weights:" "NOT INCLUDED" > "$OUT/REALIGNS-RUNTIME-AUTHORITY.txt"
+          printf 'Realigns Local Studio v1\nLinux x64 AI Runtime\nllama.cpp=%s\nstable-diffusion.cpp=7f410a3793c5bba8eb198e962ce7a3d6095f9d89\nGGML_NATIVE=OFF\nModel weights=NOT INCLUDED\n' "$LLAMA_COMMIT" > "$OUT/REALIGNS-RUNTIME-AUTHORITY.txt"
 
           cd "$OUT"
 
-          sha256sum \
-            llama-server \
-            sd-cli \
-            > SHA256SUMS.txt
+          sha256sum llama-server sd-cli > SHA256SUMS.txt
 
-          echo "===== RUNTIME FILES ====="
-          find . -maxdepth 1 -type f -print | sort
+          echo "===== FILE TYPES ====="
+          cat FILE-TYPES.txt
 
-          echo ""
+          echo "===== DEPENDENCIES ====="
+          cat LDD-DEPENDENCIES.txt
+
           echo "===== HASHES ====="
           cat SHA256SUMS.txt
 
-          echo ""
-          echo "===== DEPENDENCIES ====="
-          cat LLD-DEPENDENCIES.txt
-
-      - name: Verify Linux runtime before upload
+      - name: Verify Linux x64 runtime
         shell: bash
         run: |
           set -euo pipefail
@@ -212,22 +157,12 @@ jobs:
 
           sha256sum --check SHA256SUMS.txt
 
-          if find . -maxdepth 1 -type f \
-            \( \
-              -iname '*.gguf' \
-              -o -iname '*.safetensors' \
-              -o -iname '*.ckpt' \
-              -o -iname '*.onnx' \
-              -o -iname '*.pt' \
-              -o -iname '*.pth' \
-            \) \
-            | grep -q .
-          then
+          if find . -maxdepth 1 -type f \( -iname '*.gguf' -o -iname '*.safetensors' -o -iname '*.ckpt' -o -iname '*.onnx' -o -iname '*.pt' -o -iname '*.pth' \) | grep -q .; then
             echo "FAIL: model weight detected in runtime artifact."
             exit 1
           fi
 
-          echo "PASS: Linux runtime artifact validated."
+          echo "PASS: Linux x64 runtime validated."
 
       - name: Upload Linux x64 runtime
         uses: actions/upload-artifact@v6
